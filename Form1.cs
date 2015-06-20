@@ -92,9 +92,12 @@ namespace ManualPatcher
 
                     if (versionInfo.Key == 1 && versionInfo.Value == 0)
                     {
-                        MessageBox.Show("Couldn't figure out the variant. Please enter it yourself!");
 
                         nudVersion.Value = CheckBaseWZVersion();
+                        if (nudVersion.Value == 0)
+                        {
+                            MessageBox.Show("Couldn't figure out the variant. Please enter it yourself!");
+                        }
                     }
                     else
                     {
@@ -300,7 +303,10 @@ namespace ManualPatcher
             var bl = locales.SelectedItem as BaseLocale;
             lblStatus.Text = "Loading all patches...";
 
-            bl.LoadAllPatches();
+            if (nudVersion.Value > 0)
+                bl.LoadAllPatches((ushort)nudVersion.Value);
+            else
+                bl.LoadAllPatches();
 
             nudFinalVersion.Minimum = bl.MinVersion;
             nudFinalVersion.Maximum = bl.MaxVersion;

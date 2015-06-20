@@ -32,8 +32,10 @@ namespace ManualPatcher
             return Name;
         }
 
-        public void LoadAllPatches()
+        public void LoadAllPatches(ushort? minVersion = null)
         {
+            minVersion = minVersion.HasValue ? minVersion : MinVersion;
+
             if (_versionToNewVersion != null) return;
             _versionToNewVersion = new Dictionary<ushort, ushort>();
 
@@ -79,7 +81,7 @@ namespace ManualPatcher
 
             var foundUpdate = false;
 
-            for (ushort i = MinVersion; ; i++)
+            for (ushort i = minVersion.Value; ; i++)
             {
                 var result = loadVersionInPatch(i);
                 if (result == null)

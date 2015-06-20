@@ -28,7 +28,7 @@ namespace ManualPatcher
     class LocaleSEA : BaseLocale
     {
         public LocaleSEA()
-            : base("SEA", "ftp://update.maplesea.com/sea/patch/patchdir/", 7, 139)
+            : base("SEA", "ftp://update.maplesea.com/sea/patch/patchdir/", 7, 141)
         {
         }
     }
