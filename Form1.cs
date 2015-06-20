@@ -204,6 +204,11 @@ namespace MS_AutoPatcher
                                 MessageBox.Show("Sorry, but I'm out of ideas now....");
                             }
                         }
+                        else
+                        {
+                            if (!ApplyNXPatchedFiles(currentVersion, newVersion.Value))
+                                return;
+                        }
 
                         break;
                     }
@@ -264,6 +269,98 @@ namespace MS_AutoPatcher
             Console.WriteLine("NXPatcher exited with {0}", process.ExitCode);
 
             return process.ExitCode;
+        }
+
+        private bool ApplyNXPatchedFiles(int fromVersion, int toVersion)
+        {
+            string outputDir = Path.Combine(_mapleDir, String.Format("Patcher_{0}-{1}", fromVersion, toVersion)) + Path.DirectorySeparatorChar;
+            string backupDir = Path.Combine(_mapleDir, String.Format("Prepatch_{0}", fromVersion)) + Path.DirectorySeparatorChar;
+
+            if (!Directory.Exists(outputDir))
+            {
+                MessageBox.Show("Failed to patch? The patch output dir wasn't there.\nOutput dir:\n" + outputDir);
+                return false;
+            }
+
+            if (Directory.Exists(backupDir))
+            {
+                if (MessageBox.Show("Backup directory is already there; overwrite?\nBackup dir:\n" + backupDir, "", MessageBoxButtons.OKCancel) == System.Windows.Forms.DialogResult.Cancel)
+                {
+                    return false;
+                }
+                else
+                {
+                    Directory.Delete(backupDir, true);
+                }
+            }
+
+            Func<string, bool> moveFiles = null;
+            moveFiles = (path) =>
+            {
+                Console.WriteLine("Running in path: {0}", path);
+                Directory.CreateDirectory(Path.Combine(backupDir, path));
+
+                var outputPath = Path.Combine(outputDir, path);
+
+                foreach (var filepath in Directory.GetFiles(outputPath))
+                {
+                    var filename = Path.GetFileName(filepath);
+                    var fileLocalPath = Path.Combine(path, filename);
+                    var originalFilePath = Path.Combine(_mapleDir, fileLocalPath);
+                    var backupFilePath = Path.Combine(backupDir, fileLocalPath);
+
+                    if (File.Exists(originalFilePath))
+                    {
+                        try
+                        {
+                            Console.WriteLine("Moving {0} to {1}", originalFilePath, backupFilePath);
+                            File.Move(originalFilePath, backupFilePath);
+                            Console.WriteLine("Moving {0} to {1}", filepath, originalFilePath);
+                            File.Move(filepath, originalFilePath);
+                        }
+                        catch (Exception)
+                        {
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("File not found: {0}", originalFilePath);
+                    }
+                }
+
+                foreach (var dirpath in Directory.GetDirectories(outputPath))
+                {
+                    var dirname = dirpath.Substring(dirpath.LastIndexOf(Path.DirectorySeparatorChar) + 1);
+                    var dirLocalPath = Path.Combine(path, dirname + Path.DirectorySeparatorChar);
+                    var originalDirPath = Path.Combine(_mapleDir, dirLocalPath);
+                    var backupDirPath = Path.Combine(backupDir, dirLocalPath);
+
+                    if (Directory.Exists(originalDirPath))
+                    {
+                        if (!moveFiles(dirLocalPath))
+                            return false;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Directory not found: {0}", originalDirPath);
+                    }
+                }
+
+                return true;
+            };
+
+            if (!moveFiles("." + Path.DirectorySeparatorChar))
+            {
+                MessageBox.Show("An error occurred while applying the patched files. You can find a backup of the files already patched here:\n" + backupDir);
+                return false;
+            }
+            else
+            {
+                Directory.Delete(outputDir, true);
+            }
+
+            return true;
         }
 
         private int CheckBaseWZVersion()

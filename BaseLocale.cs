@@ -7,6 +7,8 @@ using System.Net;
 using System.IO;
 using System.Diagnostics;
 
+using System.Windows.Forms;
+
 namespace MS_AutoPatcher
 {
     abstract class BaseLocale
@@ -125,25 +127,34 @@ namespace MS_AutoPatcher
             var filename = String.Format("{0:D5}to{1:D5}.patch", versionFrom, versionTo);
             var tempfile = LocalPath(filename);
 
-            if (!File.Exists(tempfile))
+            if (File.Exists(tempfile))
             {
-                var wc = new WebClient();
-                var uri = new Uri(String.Format("{0}{1:D5}/{2}", URL, versionTo, filename));
-
-                int percentage = -1;
-                wc.DownloadProgressChanged += (x, e) =>
+                if (MessageBox.Show("Patchfile already exists; use?\nPatchfile: " + filename, "", MessageBoxButtons.YesNo) == DialogResult.Yes)
                 {
-                    if (percentage == e.ProgressPercentage) return;
-                    percentage = e.ProgressPercentage;
-                    onProgress(percentage);
-                };
-
-                Console.WriteLine("Downloading patchfile: {0}", uri.AbsoluteUri);
-                wc.DownloadFileAsync(uri, tempfile);
-
-                while (wc.IsBusy)
-                    System.Threading.Thread.Sleep(2000);
+                    return tempfile;
+                }
+                else
+                {
+                    File.Delete(tempfile);
+                }
             }
+
+            var wc = new WebClient();
+            var uri = new Uri(String.Format("{0}{1:D5}/{2}", URL, versionTo, filename));
+
+            int percentage = -1;
+            wc.DownloadProgressChanged += (x, e) =>
+            {
+                if (percentage == e.ProgressPercentage) return;
+                percentage = e.ProgressPercentage;
+                onProgress(percentage);
+            };
+
+            Console.WriteLine("Downloading patchfile: {0}", uri.AbsoluteUri);
+            wc.DownloadFileAsync(uri, tempfile);
+
+            while (wc.IsBusy)
+                System.Threading.Thread.Sleep(2000);
 
             return tempfile;
         }
