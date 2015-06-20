@@ -28,7 +28,16 @@ namespace ManualPatcher
     class LocaleSEA : BaseLocale
     {
         public LocaleSEA()
-            : base("Global", "ftp://update.maplesea.com/sea/patch/patchdir/", 7, 139)
+            : base("SEA", "ftp://update.maplesea.com/sea/patch/patchdir/", 7, 139)
+        {
+        }
+    }
+
+
+    class LocaleJapan : BaseLocale
+    {
+        public LocaleJapan()
+            : base("Japan", "ftp://download2.nexon.co.jp/maple/patch/patchdir/", 3, 318)
         {
         }
     }

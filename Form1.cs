@@ -67,7 +67,9 @@ namespace ManualPatcher
         {
             locales.Items.AddRange(new object[] {
                 new LocaleEurope(),
-                new LocaleGlobal()
+                new LocaleGlobal(),
+                new LocaleJapan(),
+                new LocaleSEA()
             });
         }
 
@@ -159,7 +161,7 @@ namespace ManualPatcher
                                 bw.ReportProgress(0, String.Format("Downloading {0} to {1} patch: {2}%", currentVersion, newVersion.Value, progress));
                             });
                         }
-                        catch (Exception ex)
+                        catch (Exception)
                         {
                             bw.ReportProgress(0, "Failed downloading patch. Trying different version.");
                             newVersion = (ushort)(newVersion.Value - 1);

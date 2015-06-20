@@ -39,11 +39,22 @@ namespace ManualPatcher
 
             Func<ushort, IEnumerable<ushort>> loadVersionInPatch = (version) =>
             {
-                var hwr = HttpWebRequest.Create(String.Format("{0}{1:D5}/Version.info", URL, version));
-                hwr.Proxy = null;
+                WebRequest wr = null;
+
+                var fullUrl = String.Format("{0}{1:D5}/Version.info", URL, version);
+                switch (URL.Substring(0, URL.IndexOf(':')))
+                {
+                    case "http": wr = HttpWebRequest.Create(fullUrl); break;
+                    case "https": wr = HttpWebRequest.Create(fullUrl); break;
+                    case "ftp": wr = FtpWebRequest.Create(fullUrl); break;
+                    default: throw new NotSupportedException("Protocol used in this url is not supported: " + URL);
+                }
+                
+                
+                wr.Proxy = null;
                 try
                 {
-                    using (var response = hwr.GetResponse() as HttpWebResponse)
+                    using (var response = wr.GetResponse() as WebResponse)
                     using (var sr = new StreamReader(response.GetResponseStream()))
                     {
                         var fullFile = sr
