@@ -27,9 +27,9 @@ I did, however, make a proxy for downloading MapleStory Europe and Global files.
 
 ## Your tool broke my MapleStory installation!
 
-Yes, this could happen. When Nexon releases a broken patch (I've seen this happen!), you are screwed. Maybe you want to redownload the game after all?
+Yes, this could happen. When Nexon releases a broken patch (I've seen this happen!), you are screwed. Maybe you want to redownload the game after all? You could at least copy all the files from Prepatch_{previous version} into the maplestory directory to fix your installation.
 
-## Can I remove the v{version number here} folders in my MapleStory directory?
+## Can I remove the Prepatch_{version number here} folders in my MapleStory directory?
 
 Sure, but you can use them to downgrade. You have to do it from the latest to the oldest one, tho.
 
