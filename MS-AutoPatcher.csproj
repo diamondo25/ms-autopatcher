@@ -7,8 +7,8 @@
     <ProjectGuid>{BFF1AE30-6F08-4ABA-9E9A-691B8096C740}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>ManualPatcher</RootNamespace>
-    <AssemblyName>ManualPatcher</AssemblyName>
+    <RootNamespace>MS_AutoPatcher</RootNamespace>
+    <AssemblyName>MS-AutoPatcher</AssemblyName>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>

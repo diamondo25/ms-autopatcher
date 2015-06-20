@@ -1,4 +1,4 @@
-﻿namespace ManualPatcher
+﻿namespace MS_AutoPatcher
 {
     partial class Form1
     {

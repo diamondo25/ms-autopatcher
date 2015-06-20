@@ -10,7 +10,7 @@ using System.IO;
 using System.Diagnostics;
 using System.Reflection;
 
-namespace ManualPatcher
+namespace MS_AutoPatcher
 {
     public partial class Form1 : Form
     {

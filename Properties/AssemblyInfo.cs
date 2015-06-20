@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("ManualPatcher")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("MS-AutoPatcher")]
+[assembly: AssemblyDescription("MapleStory AutoPatcher")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("ManualPatcher")]
-[assembly: AssemblyCopyright("Copyright ©  2015")]
+[assembly: AssemblyProduct("MS-AutoPatcher")]
+[assembly: AssemblyCopyright("Copyright © CraftNet 2015")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace ManualPatcher.Properties {
+namespace MS_AutoPatcher.Properties {
     using System;
     
     
@@ -39,7 +39,7 @@ namespace ManualPatcher.Properties {
         public static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
-                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("ManualPatcher.Properties.Resources", typeof(Resources).Assembly);
+                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("MS_AutoPatcher.Properties.Resources", typeof(Resources).Assembly);
                     resourceMan = temp;
                 }
                 return resourceMan;
@@ -78,10 +78,10 @@ namespace ManualPatcher.Properties {
         ///
         ///[read]
         ///usefastpatchtype = 0
-        ///outputfolder = Patcher
+        ///outputfolder = Patcher_{nxpatcher:version}-{nxpatcher:version_to}
         ///ifbackup = 1
         ///backupdir = v{nxpatcher:version}
-        ///ifdeltxt = 0
+        ///ifdeltxt = 1
         ///deltxt = delfiles.txt
         ///ifautoapply = 1
         ///
@@ -94,9 +94,7 @@ namespace ManualPatcher.Properties {
         ///deltxt = {read:deltxt}
         ///ifautoapply = {read:ifautoapply}
         ///
-        ///[split]
-        ///ifoutputbase = 1
-        ///outputbase = {nxpatcher [rest of string was truncated]&quot;;.
+        ///[split] [rest of string was truncated]&quot;;.
         /// </summary>
         public static string NXPatcher_INI {
             get {

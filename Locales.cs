@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace ManualPatcher
+namespace MS_AutoPatcher
 {
     class LocaleEurope : BaseLocale
     {

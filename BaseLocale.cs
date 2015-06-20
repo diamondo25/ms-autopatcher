@@ -7,7 +7,7 @@ using System.Net;
 using System.IO;
 using System.Diagnostics;
 
-namespace ManualPatcher
+namespace MS_AutoPatcher
 {
     abstract class BaseLocale
     {
