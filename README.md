@@ -20,6 +20,10 @@ Yes, this could happen. When Nexon releases a broken patch (I've seen this happe
 
 Sure, but you can use them to downgrade. You have to do it from the latest to the oldest one, tho.
 
+## Can I remove the patchfiles that are stored under these folders with the MapleStory locale names (eg. Global)?
+
+Sure, these are put there for manually patching if you need it.
+
 ## Why does your tool not support subversions?
 
 Haven't figured out how this works in MapleStory, as they only store the version numbers in Patcher.info
