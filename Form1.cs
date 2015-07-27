@@ -2,13 +2,10 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Windows.Forms;
-using System.IO;
 using System.Diagnostics;
-using System.Reflection;
+using System.IO;
+using System.Linq;
+using System.Windows.Forms;
 
 namespace MS_AutoPatcher
 {
@@ -17,8 +14,28 @@ namespace MS_AutoPatcher
         private string _mapleDir = "";
         private string __nxpatcher = null;
         private string _nxPatcher { get { return __nxpatcher ?? (__nxpatcher = ExportNXPatcher()); } }
+        private bool RemoveBackup { get { return chkBackupMaple.Checked; } }
+        private bool RemovePatchAfterInstall { get { return chkRemovePatchAfterInstall.Checked; } }
 
         BackgroundWorker bw = new BackgroundWorker();
+
+        private void ToggleInputs(bool enable)
+        {
+            this.Invoke((MethodInvoker)delegate
+            {
+                txtPath.Enabled = btnPathSelector.Enabled = locales.Enabled = nudVersion.Enabled = nudFinalVersion.Enabled = button2.Enabled = 
+                chkBackupMaple.Enabled = chkRemovePatchAfterInstall.Enabled = cbProxies.Enabled = enable;
+            });
+
+        }
+
+        private void SetStatus(string status)
+        {
+            this.Invoke((MethodInvoker)delegate
+            {
+                lblStatus.Text = status;
+            });
+        }
 
         public Form1()
         {
@@ -26,26 +43,17 @@ namespace MS_AutoPatcher
             bw.WorkerSupportsCancellation = false;
             bw.DoWork += (x, y) =>
             {
-                this.Invoke((MethodInvoker)delegate
-                {
-                    txtPath.Enabled = btnPathSelector.Enabled = locales.Enabled = nudVersion.Enabled = nudFinalVersion.Enabled = button2.Enabled = false;
-
-                    lblStatus.Text = "Starting!";
-                });
-
                 object[] lol = y.Argument as object[];
                 try
                 {
+                    ToggleInputs(false);
+                    SetStatus("Starting!");
                     Run(lol[0] as BaseLocale, (ushort)lol[1]);
                 }
                 catch (Exception)
                 {
-                    this.Invoke((MethodInvoker)delegate
-                    {
-                        txtPath.Enabled = btnPathSelector.Enabled = locales.Enabled = nudVersion.Enabled = nudFinalVersion.Enabled = button2.Enabled = true;
-
-                        lblStatus.Text = "Idle...";
-                    });
+                    ToggleInputs(true);
+                    SetStatus("Idle...");
                 }
             };
             bw.ProgressChanged += (x, progress) =>
@@ -66,10 +74,13 @@ namespace MS_AutoPatcher
         private void Form1_Load(object sender, EventArgs e)
         {
             locales.Items.AddRange(new object[] {
-                new LocaleEurope(),
                 new LocaleGlobal(),
+                new LocaleEurope(),
+                new LocaleSEA(),
                 new LocaleJapan(),
-                new LocaleSEA()
+                new LocaleTaiwan(),
+                new LocaleIndonesia(),
+                new LocaleKorea()
             });
         }
 
@@ -185,23 +196,13 @@ namespace MS_AutoPatcher
                             }
                             else if (MessageBox.Show("NXPatcher exited with exit code " + exitCode + ". Try maple patcher instead?", "", MessageBoxButtons.YesNo) == System.Windows.Forms.DialogResult.Yes)
                             {
-                                using (var binw = new BinaryWriter(File.Open(Path.Combine(_mapleDir, "Patcher.info"), FileMode.Create, FileAccess.Write, FileShare.Read)))
-                                {
-                                    binw.Write((ushort)currentVersion);
-                                    binw.Write((ushort)newVersion.Value);
-                                    binw.Write(new byte[0x300]);
-                                    // Last executed path
-                                    binw.Write(new byte[0x100]);
-                                    // Last working dir
-                                    binw.Write(new byte[0x100]);
-                                    binw.Flush();
-                                    binw.Close();
-                                }
+                                WritePatcherInfoFile(currentVersion, newVersion.Value);
                                 OpenPatcher();
                             }
                             else
                             {
                                 MessageBox.Show("Sorry, but I'm out of ideas now....");
+                                return;
                             }
                         }
                         else
@@ -245,10 +246,7 @@ namespace MS_AutoPatcher
             Console.WriteLine("MaplePatcher exited with {0}", process.ExitCode);
             List<Process> processes = Process.GetProcesses().Where(x => x.ProcessName.IndexOf("NewPatcher") != -1).ToList();
 
-            processes.ForEach(p =>
-            {
-                p.WaitForExit();
-            });
+            processes.ForEach(p =>p.WaitForExit());
 
             return process.ExitCode;
         }
@@ -358,6 +356,8 @@ namespace MS_AutoPatcher
             else
             {
                 Directory.Delete(outputDir, true);
+                if (RemoveBackup)
+                    Directory.Delete(backupDir, true);
             }
 
             return true;
@@ -395,21 +395,115 @@ namespace MS_AutoPatcher
             return tempFile;
         }
 
+        private void WritePatcherInfoFile(ushort currentVersion, ushort newVersion)
+        {
+            using (var binw = new BinaryWriter(File.Open(Path.Combine(_mapleDir, "Patcher.info"), FileMode.Create, FileAccess.Write, FileShare.Read)))
+            {
+                binw.Write(currentVersion);
+                binw.Write(newVersion);
+                binw.Write(new byte[0x300]);
+                // Last executed path
+                binw.Write(new byte[0x100]);
+                // Last working dir
+                binw.Write(new byte[0x100]);
+
+                if (binw.BaseStream.Length != 1284)
+                    throw new Exception("Patcher.info is an invalid length!");
+                binw.Flush();
+                binw.Close();
+            }
+        }
+
+        BackgroundWorker patchFetcherWorker = null;
         private void locales_SelectedIndexChanged(object sender, EventArgs e)
         {
-            var bl = locales.SelectedItem as BaseLocale;
-            lblStatus.Text = "Loading all patches...";
+            var bl = (BaseLocale)locales.SelectedItem;
 
-            if (nudVersion.Value > 0)
-                bl.LoadAllPatches((ushort)nudVersion.Value);
-            else
-                bl.LoadAllPatches();
+            cbProxies.Items.Clear();
+            cbProxies.Items.AddRange(bl.Proxies.Select(kvp => kvp.Key).ToArray());
+            cbProxies.SelectedItem = "Official";
 
-            nudFinalVersion.Minimum = bl.MinVersion;
-            nudFinalVersion.Maximum = bl.MaxVersion;
-            nudFinalVersion.Value = nudFinalVersion.Maximum;
+        }
 
-            lblStatus.Text = "Idle...";
+        private void Form1_HelpRequested(object sender, HelpEventArgs hlpevent)
+        {
+            var locale = (BaseLocale)locales.SelectedItem;
+            if (locale != null && locale.Loaded)
+            {
+                new ShowUpgradingList(locale).ShowDialog();
+            }
+        }
+
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (patchFetcherWorker != null && patchFetcherWorker.IsBusy)
+            {
+                patchFetcherWorker.CancelAsync();
+            }
+        }
+
+        private void cbProxies_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            var locale = (BaseLocale)locales.SelectedItem;
+            if (locale != null)
+            {
+                locale.UseProxy((string)cbProxies.SelectedItem);
+
+                if (patchFetcherWorker != null)
+                {
+                    patchFetcherWorker.CancelAsync();
+                    patchFetcherWorker.Dispose();
+                    patchFetcherWorker = null;
+                }
+
+                SetStatus("Loading all patches...");
+                ToggleInputs(false);
+                if (nudVersion.Value > 0)
+                    patchFetcherWorker = locale.LoadAllPatches((ushort)nudVersion.Value, true);
+                else
+                    patchFetcherWorker = locale.LoadAllPatches(null, true);
+
+                patchFetcherWorker.WorkerReportsProgress = true;
+                patchFetcherWorker.WorkerSupportsCancellation = true;
+
+                patchFetcherWorker.ProgressChanged += (x, data) =>
+                {
+                    SetStatus((string)data.UserState);
+                };
+
+                patchFetcherWorker.RunWorkerCompleted += (x, y) =>
+                {
+                    Invoke((MethodInvoker)delegate
+                    {
+                        nudFinalVersion.Minimum = locale.MinVersion;
+                        nudFinalVersion.Maximum = locale.MaxVersion;
+                        nudFinalVersion.Value = nudFinalVersion.Maximum;
+
+                    });
+                    SetStatus("Idle...");
+                    ToggleInputs(true);
+                };
+
+                patchFetcherWorker.RunWorkerAsync();
+            }
+        }
+
+        private void Form1_KeyPress(object sender, KeyPressEventArgs e)
+        {
+        }
+
+        private void createPatcherinfoToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            var sfd = new SaveFileDialog();
+            sfd.Title = "Patcher.info to create";
+            sfd.FileName = "Patcher.info";
+            if (sfd.ShowDialog() == DialogResult.OK)
+            {
+                var tmp = _mapleDir;
+                _mapleDir = Path.GetDirectoryName(sfd.FileName);
+                WritePatcherInfoFile((ushort)nudVersion.Value, (ushort)nudFinalVersion.Value);
+                _mapleDir = tmp;
+            }
         }
     }
 }
