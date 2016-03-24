@@ -58,7 +58,7 @@ namespace MS_AutoPatcher
     class LocaleIndonesia : BaseLocale
     {
         public LocaleIndonesia()
-            : base("Indonesia", "http://202.93.17.225/", 3, 1)
+            : base("Indonesia", "http://202.93.17.225/", 100, 1)
         {
             AddProxy("CraftNet NL Mirror", "http://nx-mirror.craftnet.nl/ims/");
             NewFormat = true;
@@ -72,6 +72,15 @@ namespace MS_AutoPatcher
         {
             AddProxy("CraftNet NL Mirror", "http://nx-mirror.craftnet.nl/kms/Patch/");
             NewFormat = true;
+        }
+    }
+
+    class LocaleChina : BaseLocale
+    {
+        public LocaleChina()
+            : base("China", "http://mxd.clientdown.sdo.com/mxd/Patch/", 4, 123)
+        {
+            AddProxy("CraftNet NL Mirror", "http://nx-mirror.craftnet.nl/cms/mxd/Patch/");
         }
     }
 }

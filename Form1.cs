@@ -23,7 +23,7 @@ namespace MS_AutoPatcher
         {
             this.Invoke((MethodInvoker)delegate
             {
-                txtPath.Enabled = btnPathSelector.Enabled = locales.Enabled = nudVersion.Enabled = nudFinalVersion.Enabled = button2.Enabled = 
+                txtPath.Enabled = btnPathSelector.Enabled = locales.Enabled = nudVersion.Enabled = nudFinalVersion.Enabled = button2.Enabled =
                 chkBackupMaple.Enabled = chkRemovePatchAfterInstall.Enabled = cbProxies.Enabled = enable;
             });
 
@@ -104,24 +104,31 @@ namespace MS_AutoPatcher
                     if (versionInfo.Key == 1 && versionInfo.Value == 0)
                     {
 
-                        nudVersion.Value = CheckBaseWZVersion();
-                        if (nudVersion.Value == 0)
+                        var version = DetectBaseWZVersion();
+                        if (version == 0)
                         {
-                            MessageBox.Show("Couldn't figure out the variant. Please enter it yourself!");
+                            MessageBox.Show("Couldn't figure out the version. Please enter it yourself!");
                         }
+                        var locale = DetectLocale();
+                        if (locale == 0)
+                        {
+                            MessageBox.Show("Couldn't figure out the locale. Please enter it yourself!");
+                        }
+
+                        versionInfo = new KeyValuePair<byte, ushort>(locale, version);
+
+
                     }
-                    else
+
+                    nudVersion.Value = versionInfo.Value;
+                    var i = 0;
+                    foreach (BaseLocale bl in locales.Items)
                     {
-                        nudVersion.Value = versionInfo.Value;
-                        var i = 0;
-                        foreach (BaseLocale bl in locales.Items)
+                        if (bl.Locale == versionInfo.Key)
                         {
-                            if (bl.Locale == versionInfo.Key)
-                            {
-                                locales.SelectedIndex = i;
-                            }
-                            i++;
+                            locales.SelectedIndex = i;
                         }
+                        i++;
                     }
                 }
             }
@@ -190,7 +197,7 @@ namespace MS_AutoPatcher
                             if (currentVersion + 1 != newVersion.Value)
                             {
                                 bw.ReportProgress(0, "Trying older version...");
-                                bw.ReportProgress(0, CheckBaseWZVersion());
+                                bw.ReportProgress(0, DetectBaseWZVersion());
                                 newVersion = (ushort)(newVersion.Value - 1);
                                 continue;
                             }
@@ -202,6 +209,7 @@ namespace MS_AutoPatcher
                             else
                             {
                                 MessageBox.Show("Sorry, but I'm out of ideas now....");
+                                ToggleInputs(true);
                                 return;
                             }
                         }
@@ -216,7 +224,7 @@ namespace MS_AutoPatcher
 
                     currentVersion = newVersion.Value;
                     bw.ReportProgress(0, (int)nudVersion.Value);
-                   
+
                 }
                 else
                 {
@@ -242,11 +250,11 @@ namespace MS_AutoPatcher
                 WorkingDirectory = _mapleDir
             });
             process.WaitForExit();
-            
+
             Console.WriteLine("MaplePatcher exited with {0}", process.ExitCode);
             List<Process> processes = Process.GetProcesses().Where(x => x.ProcessName.IndexOf("NewPatcher") != -1).ToList();
 
-            processes.ForEach(p =>p.WaitForExit());
+            processes.ForEach(p => p.WaitForExit());
 
             return process.ExitCode;
         }
@@ -259,7 +267,7 @@ namespace MS_AutoPatcher
             var process = Process.Start(new ProcessStartInfo(_nxPatcher)
             {
                 WorkingDirectory = _mapleDir,
-                Arguments = "read "+ '"' + patchfile + '"'
+                Arguments = "read " + '"' + patchfile + '"'
             });
 
             process.WaitForExit();
@@ -363,8 +371,11 @@ namespace MS_AutoPatcher
             return true;
         }
 
-        private int CheckBaseWZVersion()
+        private ushort DetectBaseWZVersion()
         {
+            var nxdirPath = Path.GetDirectoryName(_nxPatcher);
+            File.WriteAllText(Path.Combine(_mapleDir, "NXPatcher.ini"), Properties.Resources.NXPatcher_INI);
+
             var process = new Process();
             process.StartInfo = new ProcessStartInfo(_nxPatcher)
             {
@@ -381,9 +392,46 @@ namespace MS_AutoPatcher
 
             if (sr.Contains("version is"))
             {
-                var version = int.Parse(sr.Substring(sr.LastIndexOf(' ')));
+                var version = ushort.Parse(sr.Substring(sr.LastIndexOf(' ')));
                 return version;
             }
+
+            return 0;
+        }
+
+        private byte DetectLocale()
+        {
+            // KMS has generic MapleStory.ini
+            if (File.Exists(Path.Combine(_mapleDir, "MapleStory.ini")))
+                return 1;
+
+            // JMS has ingame advertising from Tricod
+            if (File.Exists(Path.Combine(_mapleDir, "Tricod6_0_maple_md.dll")))
+                return 3;
+
+            // CMS uses Shanda encryption (SD*)
+            if (File.Exists(Path.Combine(_mapleDir, "SDDyn.ini")))
+                return 4;
+
+            // TWMS has 'bean.ico' BeanFun! icon
+            if (File.Exists(Path.Combine(_mapleDir, "bean.ico")))
+                return 6;
+
+            // SEA has 'NetWrap.dll' HackShield dll (unused?)
+            if (File.Exists(Path.Combine(_mapleDir, "NetWrap.dll")))
+                return 7;
+
+            // Old GMS version has a 'MapleStoryUS.ini' file
+            if (File.Exists(Path.Combine(_mapleDir, "MapleStoryUS.ini")))
+                return 8;
+
+            // EMS has WZ files with locales
+            if (File.Exists(Path.Combine(_mapleDir, "StringDE.wz")))
+                return 9;
+
+            // IMS has a MSIDLauncer.exe
+            if (File.Exists(Path.Combine(_mapleDir, "MSIDLauncher.exe")))
+                return 100;
 
             return 0;
         }
