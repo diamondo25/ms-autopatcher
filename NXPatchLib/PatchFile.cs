@@ -117,37 +117,7 @@ namespace NXPatchLib
             filesOkay = _filesOkay;
             filesBad = _filesBad;
             GC.Collect();
-
-            /*
-            do
-            {
-                byte x = _reader.ReadByte();
-                switch (x)
-                {
-                    case 0: step = new PatchStepCreate(filename); break;
-                    case 1: step = new PatchStepChange(filename); break;
-                    case 2: step = new PatchStepDelete(filename); break;
-                    default:
-                        filename += (char)x;
-                        continue;
-                }
-
-                if (step != null)
-                {
-                    var handled = step.Parse(_reader, inputDirectory, outputDirectory);
-                    if (handled != null)
-                    {
-                        filesOkay.Add(handled);
-                    }
-                    else
-                    {
-                        filesBad.Add(filename);
-                    }
-                    filename = "";
-                    step = null;
-                }
-            } while (_reader.BaseStream.Position != _reader.BaseStream.Length);
-            */
+            
         }
 
         private static byte[] zlibInflate(byte[] input)
