@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NXPatchLib;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -14,7 +15,7 @@ namespace MS_AutoPatcher
         private string _mapleDir = "";
         private string __nxpatcher = null;
         private string _nxPatcher { get { return __nxpatcher ?? (__nxpatcher = ExportNXPatcher()); } }
-        private bool RemoveBackup { get { return chkBackupMaple.Checked; } }
+        private bool RemoveBackup { get { return !chkBackupMaple.Checked; } }
         private bool RemovePatchAfterInstall { get { return chkRemovePatchAfterInstall.Checked; } }
 
         BackgroundWorker bw = new BackgroundWorker();
@@ -190,18 +191,45 @@ namespace MS_AutoPatcher
                         }
 
                         bw.ReportProgress(0, String.Format("Running patcher for {0} -> {1}", currentVersion, newVersion.Value));
-                        var exitCode = OpenNXPatcher(patchFilename);
 
-                        if (exitCode != 0)
+                        var succeeded = RunOwnPatcher(patchFilename, currentVersion, newVersion.Value);
+                        if (!succeeded)
                         {
-                            if (currentVersion + 1 != newVersion.Value)
+                            if (MessageBox.Show("Failed to patch with own patcher. Try NXPatcher?", "", MessageBoxButtons.YesNo) == DialogResult.Yes)
                             {
-                                bw.ReportProgress(0, "Trying older version...");
-                                bw.ReportProgress(0, DetectBaseWZVersion());
-                                newVersion = (ushort)(newVersion.Value - 1);
-                                continue;
+                                var exitCode = OpenNXPatcher(patchFilename);
+
+                                if (exitCode != 0)
+                                {
+                                    if (currentVersion + 1 != newVersion.Value)
+                                    {
+                                        bw.ReportProgress(0, "Trying older version...");
+                                        bw.ReportProgress(0, DetectBaseWZVersion());
+                                        newVersion = (ushort)(newVersion.Value - 1);
+                                        continue;
+                                    }
+                                    else if (MessageBox.Show("NXPatcher exited with exit code " + exitCode + ". Try maple patcher instead?", "", MessageBoxButtons.YesNo) == System.Windows.Forms.DialogResult.Yes)
+                                    {
+                                        WritePatcherInfoFile(currentVersion, newVersion.Value);
+                                        OpenPatcher();
+                                    }
+                                    else
+                                    {
+                                        MessageBox.Show("Sorry, but I'm out of ideas now....");
+                                        ToggleInputs(true);
+                                        return;
+                                    }
+                                }
+                                else
+                                {
+                                    if (!ApplyPatchedFiles(currentVersion, newVersion.Value))
+                                    {
+                                        ToggleInputs(true);
+                                        return;
+                                    }
+                                }
                             }
-                            else if (MessageBox.Show("NXPatcher exited with exit code " + exitCode + ". Try maple patcher instead?", "", MessageBoxButtons.YesNo) == System.Windows.Forms.DialogResult.Yes)
+                            else if (MessageBox.Show("Okay, try MaplePatcher then?", "", MessageBoxButtons.YesNo) == DialogResult.Yes)
                             {
                                 WritePatcherInfoFile(currentVersion, newVersion.Value);
                                 OpenPatcher();
@@ -215,8 +243,11 @@ namespace MS_AutoPatcher
                         }
                         else
                         {
-                            if (!ApplyNXPatchedFiles(currentVersion, newVersion.Value))
+                            if (!ApplyPatchedFiles(currentVersion, newVersion.Value))
+                            {
+                                ToggleInputs(true);
                                 return;
+                            }
                         }
 
                         break;
@@ -230,6 +261,7 @@ namespace MS_AutoPatcher
                 {
                     bw.ReportProgress(0, "Everything is up-to-date");
                     MessageBox.Show("Nothing to patch. Current version is " + currentVersion + " and latest version is " + bl.LatestVersion());
+                    ToggleInputs(true);
                     break;
                 }
 
@@ -277,10 +309,43 @@ namespace MS_AutoPatcher
             return process.ExitCode;
         }
 
-        private bool ApplyNXPatchedFiles(int fromVersion, int toVersion)
+        private bool RunOwnPatcher(string patchfile, int fromVersion, int toVersion)
         {
-            string outputDir = Path.Combine(_mapleDir, String.Format("Patcher_{0}-{1}", fromVersion, toVersion)) + Path.DirectorySeparatorChar;
-            string backupDir = Path.Combine(_mapleDir, String.Format("Prepatch_{0}", fromVersion)) + Path.DirectorySeparatorChar;
+            var file = new NXPatchLib.PatchFile(patchfile);
+            List<IPatchResult> patchResults;
+            file.Parse(_mapleDir, Path.Combine(_mapleDir, string.Format("Patcher_{0}-{1}", fromVersion, toVersion)), out patchResults);
+
+            var badfiles = patchResults.FindAll(x =>
+               !(x is PatchResultSuccessful || x is PatchResultFileDeleted)
+            );
+
+            if (badfiles.Count > 0)
+            {
+                var result = MessageBox.Show($@"The following files failed to patch:
+{string.Join(Environment.NewLine, badfiles.Select(x => x.Filename + " (" + x.Info + ")"))}
+
+Ignore and keep on patching?", "Oh shit.", MessageBoxButtons.OKCancel);
+
+                if (result == DialogResult.Cancel)
+                {
+                    patchResults.FindAll(x => x is PatchResultSuccessful || x is PatchResultPatchedFileCorrupt).ForEach(x =>
+                    {
+                        if (File.Exists(x.Filename))
+                            File.Delete(x.Filename);
+                    });
+
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool ApplyPatchedFiles(int fromVersion, int toVersion)
+        {
+            string outputDir = Path.Combine(_mapleDir, string.Format("Patcher_{0}-{1}", fromVersion, toVersion)) + Path.DirectorySeparatorChar;
+            string backupDir = Path.Combine(_mapleDir, string.Format("Prepatch_{0}", fromVersion)) + Path.DirectorySeparatorChar;
+            
 
             if (!Directory.Exists(outputDir))
             {

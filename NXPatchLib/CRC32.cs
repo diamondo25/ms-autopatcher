@@ -20,11 +20,24 @@ namespace NXPatchLib
                 IndexLookup = (rollingChecksum >> 0x18) ^ eachBlock[blockPos];
                 rollingChecksum = (rollingChecksum << 0x08) ^ sbox[IndexLookup];
             }
+
             return rollingChecksum;
         }
+        public static uint CalculateChecksumStream(Stream stream)
+        {
+            uint rollingSum = 0;
+            long left = stream.Length - stream.Position;
+            do
+            {
+                int blockSize = (int)Math.Min(SharedBuffer.BUFFER_SIZE, left);
+                stream.Read(SharedBuffer.Buffer.Value, 0, blockSize);
+                rollingSum = CalculateChecksum(SharedBuffer.Buffer.Value, blockSize, rollingSum);
+                left -= blockSize;
+            }
+            while (left > 0);
 
-        private const int BUFFER_SIZE = 0x00500000;
-        private static ThreadLocal<byte[]> Buffer = new ThreadLocal<byte[]>(() => new byte[BUFFER_SIZE]);
+            return rollingSum;
+        }
 
         public static uint CalculateChecksumFile(string filename)
         {
@@ -34,9 +47,9 @@ namespace NXPatchLib
                 long left = fs.Length;
                 do
                 {
-                    int blockSize = (int)Math.Min(BUFFER_SIZE, left);
-                    fs.Read(Buffer.Value, 0, blockSize);
-                    rollingSum = CalculateChecksum(Buffer.Value, blockSize, rollingSum);
+                    int blockSize = (int)Math.Min(SharedBuffer.BUFFER_SIZE, left);
+                    fs.Read(SharedBuffer.Buffer.Value, 0, blockSize);
+                    rollingSum = CalculateChecksum(SharedBuffer.Buffer.Value, blockSize, rollingSum);
                     left -= blockSize;
                 }
                 while (left > 0);

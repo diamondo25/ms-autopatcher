@@ -14,6 +14,9 @@ namespace NXPatchLib
         public string Filename { get; private set; }
         public bool IsFile { get { return !Filename.EndsWith("\\"); } }
 
+
+        public MemoryStream PreparedStream { get; protected set; } = null;
+
         public string DescFormat { get { return Name + " " + Filename; } }
 
         public PatchStep(string name, string filename)
@@ -22,32 +25,47 @@ namespace NXPatchLib
             Filename = filename;
         }
 
-        public virtual string Parse(BinaryReader reader, string inputDir, string outputDir)
+        public virtual IPatchResult Parse(string inputDir, string outputDir)
         {
             return null;
         }
 
-        public virtual void QuickParse(BinaryReader reader)
+        public virtual void Prepare(BinaryReader reader)
         {
+        }
+
+        public void Unprepare()
+        {
+            if (PreparedStream == null) return;
+
+            PreparedStream.Close();
+            PreparedStream.Dispose();
+            PreparedStream = null;
         }
     }
 
     public class PatchStepCreate : PatchStep
     {
+
         public PatchStepCreate(string filename) : base("Create", filename)
         {
         }
-        
-        public override void QuickParse(BinaryReader reader)
+
+        public override void Prepare(BinaryReader reader)
         {
             if (!IsFile) return;
+
+            var start = reader.BaseStream.Position;
             var Length = reader.ReadInt32();
             var Checksum = reader.ReadUInt32();
 
-            reader.BaseStream.Position += Length;
+            var blob = new byte[Length + 8];
+            reader.BaseStream.Position = start;
+            reader.Read(blob, 0, blob.Length);
+            PreparedStream = new MemoryStream(blob);
         }
 
-        public override string Parse(BinaryReader reader, string inputDir, string outputDir)
+        public override IPatchResult Parse(string inputDir, string outputDir)
         {
             if (!IsFile)
             {
@@ -55,40 +73,33 @@ namespace NXPatchLib
                 if (!Directory.Exists(path))
                     Directory.CreateDirectory(path);
 
-                return path;
+                return new PatchResultSuccessful(path);
             }
 
-            var Length = reader.ReadInt32();
-            var Checksum = reader.ReadUInt32();
-
-            uint rollingSum = 0;
-            var outputFile = Path.Combine(outputDir, Filename);
-
-            Directory.CreateDirectory(Path.GetDirectoryName(outputFile));
-
-            using (var os = File.OpenWrite(outputFile))
+            using (var reader = new BinaryReader(PreparedStream))
             {
-                var left = Length;
-                do
+                var Length = reader.ReadInt32();
+                var Checksum = reader.ReadUInt32();
+
+
+
+                var calculatedChecksum = CRC32.CalculateChecksumStream(PreparedStream);
+                PreparedStream.Position = 8;
+
+                var outputFile = Path.Combine(outputDir, Filename);
+
+                Directory.CreateDirectory(Path.GetDirectoryName(outputFile));
+
+                using (var os = File.OpenWrite(outputFile))
                 {
-                    int blockSize = (int)Math.Min(SharedBuffer.BUFFER_SIZE, left);
-                    reader.Read(SharedBuffer.Buffer.Value, 0, blockSize);
-
-                    // Write to file
-                    os.Write(SharedBuffer.Buffer.Value, 0, blockSize);
-                    rollingSum = CRC32.CalculateChecksum(SharedBuffer.Buffer.Value, blockSize, rollingSum);
-                    left -= blockSize;
+                    PreparedStream.CopyTo(os);
                 }
-                while (left > 0);
-            }
 
-            if (rollingSum != Checksum)
-            {
-                File.Move(outputFile, outputFile + "-BAD");
-                return outputFile + "-BAD";
-            }
+                if (calculatedChecksum != Checksum)
+                    return new PatchResultPatchedFileCorrupt(outputFile);
 
-            return outputFile;
+                return new PatchResultSuccessful(outputFile);
+            }
         }
     }
 
@@ -98,22 +109,29 @@ namespace NXPatchLib
         {
         }
 
-        public override string Parse(BinaryReader reader, string inputDir, string outputDir)
+        public override IPatchResult Parse(string inputDir, string outputDir)
         {
-            return Path.Combine(outputDir, Filename) + "-DELETED";
+            var inputFile = Path.Combine(inputDir, Filename);
+
+            if (!File.Exists(inputFile))
+                return new PatchResultFileNotFound(inputFile);
+            else
+                return new PatchResultFileDeleted(inputFile);
         }
     }
 
     public class PatchStepChange : PatchStep
     {
+
         public PatchStepChange(string filename) : base("Change", filename)
         {
         }
 
 
-        public override void QuickParse(BinaryReader reader)
+        public override void Prepare(BinaryReader reader)
         {
-            if (!IsFile) return;
+            var start = reader.BaseStream.Position;
+
             var ChecksumBefore = reader.ReadUInt32();
             var ChecksumAfter = reader.ReadUInt32();
 
@@ -128,8 +146,8 @@ namespace NXPatchLib
                 else if ((Command & 0x80000000) == 0x80000000)
                 {
                     int lengthOfBlock = (int)(Command & 0x7FFFFFFF);
-                    
-                        reader.BaseStream.Position += lengthOfBlock;
+
+                    reader.BaseStream.Position += lengthOfBlock;
                 }
                 else
                 {
@@ -137,109 +155,106 @@ namespace NXPatchLib
                     int oldFileOffset = reader.ReadInt32();
                 }
             }
+
+            var end = reader.BaseStream.Position;
+
+            var blob = new byte[end - start];
+            reader.BaseStream.Position = start;
+            reader.BaseStream.Read(blob, 0, blob.Length);
+
+            PreparedStream = new MemoryStream(blob);
         }
 
 
-        public override string Parse(BinaryReader reader, string inputDir, string outputDir)
+        public override IPatchResult Parse(string inputDir, string outputDir)
         {
-            var ChecksumBefore = reader.ReadUInt32();
-            var outputFile = Path.Combine(outputDir, Filename);
-            var inputFile = Path.Combine(inputDir, Filename);
-
-            if (File.Exists(outputFile))
+            using (var reader = new BinaryReader(PreparedStream))
             {
-                File.Move(outputFile, outputFile + "-" + DateTime.Now.ToFileTime());
-            }
+                var ChecksumBefore = reader.ReadUInt32();
+                var outputFile = Path.Combine(outputDir, Filename);
+                var inputFile = Path.Combine(inputDir, Filename);
 
-            bool error = false;
-
-            if (!File.Exists(inputFile) || CRC32.CalculateChecksumFile(inputFile) != ChecksumBefore)
-            {
-                error = true;
-            }
-
-
-            var ChecksumAfter = reader.ReadUInt32();
-
-            uint currentChecksum = 0;
-            uint flushCounter = 0;
-            FileStream input = null, output = null;
-            if (!error)
-            {
-                input = File.OpenRead(inputFile);
-                output = File.OpenWrite(outputFile);
-            }
-
-            {
-
-                int bufferOffset = 0;
-
-                Action tryFlush = () =>
+                if (File.Exists(outputFile))
                 {
-                    //if ((SharedBuffer.BUFFER_SIZE - bufferOffset) < 1000)
+                    File.Move(outputFile, outputFile + "-" + DateTime.Now.ToFileTime());
+                }
+
+
+                if (!File.Exists(inputFile))
+                    return new PatchResultFileNotFound(inputFile);
+
+                if (CRC32.CalculateChecksumFile(inputFile) != ChecksumBefore)
+                    return new PatchResultOriginalFileCorrupt(inputFile);
+
+
+                var ChecksumAfter = reader.ReadUInt32();
+
+                uint currentChecksum = 0;
+
+                using (var input = File.OpenRead(inputFile))
+                using (var output = File.OpenWrite(outputFile))
+                {
+                    var sharedBuffer = SharedBuffer.Buffer.Value;
+                    int bufferOffset = 0;
+
+                    Action tryFlush = () =>
                     {
-                        // Flush.
-                        currentChecksum = CRC32.CalculateChecksum(SharedBuffer.Buffer.Value, bufferOffset, currentChecksum);
-                        output.Write(SharedBuffer.Buffer.Value, 0, bufferOffset);
-                        output.Flush();
+                        if (bufferOffset == 0) return;
+
+                        currentChecksum = CRC32.CalculateChecksum(sharedBuffer, bufferOffset, currentChecksum);
+                        output.Write(sharedBuffer, 0, bufferOffset);
                         bufferOffset = 0;
-                    }
-                };
+                    };
 
 
-                for (uint Command = reader.ReadUInt32(); Command != 0x00000000; Command = reader.ReadUInt32())
-                {
-                    if ((Command & 0xC0000000) == 0xC0000000)
+                    for (uint Command = reader.ReadUInt32(); Command != 0x00000000; Command = reader.ReadUInt32())
                     {
-                        //This is a repeat block. It's essentially run length encoding.
-                        byte repeatedByte = (byte)(Command & 0x000000FF);
-                        int lengthOfBlock = (int)((Command & 0x3FFFFF00) >> 8);
-                        //use memset in C to write to a buffer containing the repeatedByte for lengthOfBlock number of bytes, then write it to the file.
-
-                        if (!error)
+                        if ((Command & 0xC0000000) == 0xC0000000)
                         {
+                            //This is a repeat block. It's essentially run length encoding.
+                            byte repeatedByte = (byte)(Command & 0x000000FF);
+                            int lengthOfBlock = (int)((Command & 0x3FFFFF00) >> 8);
+                            //use memset in C to write to a buffer containing the repeatedByte for lengthOfBlock number of bytes, then write it to the file.
 
                             for (var i = 0; i < lengthOfBlock; i++)
                             {
-                                SharedBuffer.Buffer.Value[bufferOffset++] = repeatedByte;
+                                sharedBuffer[bufferOffset++] = repeatedByte;
                             }
                             tryFlush();
+
                         }
-
-                    }
-                    else if ((Command & 0x80000000) == 0x80000000)
-                    {
-                        // This is a direct write block. The bytes to be written are contained directly in the zlib stream. Simply write these bytes out to the file.
-                        int lengthOfBlock = (int)(Command & 0x7FFFFFFF);
-
-                        if (!error)
+                        else if ((Command & 0x80000000) == 0x80000000)
                         {
-                            reader.Read(SharedBuffer.Buffer.Value, 0, lengthOfBlock);
-                            bufferOffset += lengthOfBlock;
+                            // This is a direct write block. The bytes to be written are contained directly in the zlib stream. Simply write these bytes out to the file.
+                            int lengthOfBlock = (int)(Command & 0x7FFFFFFF);
 
+                            while (lengthOfBlock > 0)
+                            {
+                                tryFlush();
+                                var nextBlock = Math.Min(SharedBuffer.BUFFER_SIZE - bufferOffset, lengthOfBlock);
+
+                                reader.Read(sharedBuffer, 0, nextBlock);
+                                bufferOffset += nextBlock;
+
+                                lengthOfBlock -= nextBlock;
+                            }
                             tryFlush();
+
                         }
                         else
                         {
-                            reader.BaseStream.Position += lengthOfBlock;
-                        }
-                    }
-                    else
-                    {
-                        // COPY
-                        //This means we take from the old file and write to the new file.
-                        int lengthOfBlock = (int)Command;
-                        int oldFileOffset = reader.ReadInt32();
+                            // COPY
+                            //This means we take from the old file and write to the new file.
+                            int lengthOfBlock = (int)Command;
+                            int oldFileOffset = reader.ReadInt32();
 
-                        if (!error)
-                        {
                             input.Seek(oldFileOffset, SeekOrigin.Begin);
                             while (lengthOfBlock > 0)
                             {
                                 tryFlush();
                                 var nextBlock = Math.Min(SharedBuffer.BUFFER_SIZE - bufferOffset, lengthOfBlock);
 
-                                input.Read(SharedBuffer.Buffer.Value, 0, nextBlock);
+                                input.Read(sharedBuffer, 0, nextBlock);
                                 bufferOffset += nextBlock;
 
                                 lengthOfBlock -= nextBlock;
@@ -247,33 +262,16 @@ namespace NXPatchLib
                             tryFlush();
                         }
                     }
+
+                    tryFlush();
                 }
 
-                if (!error && bufferOffset > 0)
-                {
-                    currentChecksum = CRC32.CalculateChecksum(SharedBuffer.Buffer.Value, bufferOffset, currentChecksum);
-                    output.Write(SharedBuffer.Buffer.Value, 0, bufferOffset);
-                }
-            }
 
-            if (!error)
-            {
-                input.Close();
-                output.Flush(true);
-                output.Close();
-            }
-            else
-            {
-                return null;
-            }
+                if (currentChecksum != ChecksumAfter)
+                    return new PatchResultPatchedFileCorrupt(outputFile);
 
-            if (currentChecksum != ChecksumAfter)
-            {
-                File.Move(outputFile, outputFile + "-BAD");
-                return outputFile + "-BAD";
+                return new PatchResultSuccessful(outputFile);
             }
-
-            return outputFile;
         }
 
     }
